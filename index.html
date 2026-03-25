@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="JJ Farm's"/>
+<meta name="theme-color" content="#b8952a"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<title>JJ Farm's — Cultivation Intelligence</title>
+<link rel="manifest" href="manifest.json"/>
+
+<!-- Apple touch icon inline SVG as data URI -->
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="/>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #f7f3ec; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  #root { height: 100%; display: flex; flex-direction: column; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type=number] { -moz-appearance: textfield; }
+  input[type=range] { accent-color: #b8952a; -webkit-appearance: none; height: 6px; border-radius: 3px; background: #e8dfc8; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #b8952a; cursor: pointer; box-shadow: 0 2px 6px rgba(184,149,42,0.4); }
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-thumb { background: #d4c49a; border-radius: 2px; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+  select { -webkit-appearance: none; appearance: none; }
+  button { -webkit-appearance: none; touch-action: manipulation; }
+
+  /* PWA install banner */
+  #install-banner {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: linear-gradient(135deg, #b8952a, #d4aa3a);
+    color: white; padding: 14px 18px 28px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+    transform: translateY(100%); transition: transform 0.4s ease;
+  }
+  #install-banner.show { transform: translateY(0); }
+  #install-banner .icon { font-size: 28px; flex-shrink: 0; }
+  #install-banner .text { flex: 1; font-size: 13px; line-height: 1.4; }
+  #install-banner .text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  #install-banner .close { font-size: 20px; cursor: pointer; padding: 4px; }
+
+  /* iOS safe area */
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- PWA Install Banner (iOS) -->
+<div id="install-banner">
+  <div class="icon">📲</div>
+  <div class="text">
+    <strong>Installer JJ Farm's</strong>
+    Appuyez sur <strong>Partager</strong> puis <strong>"Sur l'écran d'accueil"</strong>
+  </div>
+  <div class="close" onclick="document.getElementById('install-banner').classList.remove('show')">✕</div>
+</div>
+
+<script>
+  // Show install banner on iOS Safari after 3s (if not already installed)
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  const alreadyDismissed = localStorage.getItem('pwa-banner-dismissed');
+  if (isIOS && !isStandalone && !alreadyDismissed) {
+    setTimeout(() => {
+      document.getElementById('install-banner').classList.add('show');
+    }, 3000);
+  }
+  document.getElementById('install-banner').querySelector('.close').addEventListener('click', () => {
+    localStorage.setItem('pwa-banner-dismissed', '1');
+  });
+</script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── COLORS ─────────────────────────────────────────────────────────────────
+const C = {
+  bg:"#f7f3ec", bg2:"#fffdf8", bg3:"#f0ebe0",
+  border:"#e8dfc8", border2:"#d4c49a",
+  gold:"#b8952a", goldL:"#d4aa3a", goldXL:"#f0cc6a", goldBg:"#fdf6e3",
+  green:"#4a7c3f", greenBg:"#eef6ec",
+  text:"#2a2018", text2:"#6a5a3a", text3:"#a09070",
+  red:"#c0392b", redBg:"#fdf0ee",
+  orange:"#d4730a", orangeBg:"#fdf4e8",
+  blue:"#2a6a9a", blueBg:"#eef4fb",
+  teal:"#2a8a7a", tealBg:"#eef8f6",
+  purple:"#7a3a9a", purpleBg:"#f4eefb",
+  shadow:"rgba(90,60,10,0.10)",
+};
+
+const PHASES = {
+  germination:{ label:"🌱 Germination", color:C.teal,   bg:C.tealBg,   duration:"3-10 jours",   light_hours:16, light_intensity:30,  lamp_height_cm:60, temp:{min:22,max:26}, humidity:{min:70,max:90}, co2:{min:400,max:800},   vpd:{min:0.4,max:0.8}, hydro:{ph:{min:5.8,max:6.2},ec:{min:0.4,max:0.8},water_temp:{min:20,max:24}}, tips:"Humidite elevee. Lumiere douce 30%. Garder chaud et humide." },
+  veg:        { label:"🌿 Vegetation",  color:C.green,  bg:C.greenBg,  duration:"3-8 semaines",  light_hours:18, light_intensity:80,  lamp_height_cm:45, temp:{min:22,max:28}, humidity:{min:50,max:70}, co2:{min:800,max:1200},  vpd:{min:0.8,max:1.2}, hydro:{ph:{min:5.8,max:6.2},ec:{min:1.2,max:1.8},water_temp:{min:18,max:22}}, tips:"Croissance active. Augmenter EC progressivement." },
+  flower:     { label:"🌸 Floraison",   color:C.gold,   bg:C.goldBg,   duration:"8-16 semaines", light_hours:12, light_intensity:100, lamp_height_cm:35, temp:{min:20,max:26}, humidity:{min:40,max:50}, co2:{min:1000,max:1500}, vpd:{min:1.0,max:1.5}, hydro:{ph:{min:6.0,max:6.5},ec:{min:1.5,max:2.2},water_temp:{min:18,max:22}}, tips:"Reduire humidite. LED 100%. Lampe plus basse 35cm." },
+  drying:     { label:"🍂 Sechage",     color:C.orange, bg:C.orangeBg, duration:"7-14 jours",    light_hours:0,  light_intensity:0,   lamp_height_cm:60, temp:{min:15,max:21}, humidity:{min:45,max:55}, co2:{min:400,max:800},   vpd:{min:0.8,max:1.2}, hydro:{ph:{min:0,max:0},ec:{min:0,max:0},water_temp:{min:0,max:0}}, tips:"LED ETEINTE noir total. Ventilation douce. Temperature fraiche." },
+};
+
+const STRAINS_PHOTO = {
+  afghani:{name:"Afghani Feminized",icon:"🏔️",type:"Indica",category:"photo",flowering_weeks:{min:7,max:9},height_cm:{min:60,max:120},total_weeks:{min:15,max:21},difficulty:"Facile",tips_global:"Buds très denses → ventilation max. Tolère les nuits fraîches. Idéale débutants.",phases:{veg:{temp:{min:22,max:26},humidity:{min:50,max:65},lamp_height_cm:45,ec:{min:1.2,max:1.8}},flower:{temp:{min:20,max:24},humidity:{min:40,max:50},lamp_height_cm:45,ec:{min:1.5,max:2.0}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  hindu_kush:{name:"Hindu Kush Feminized",icon:"❄️",type:"Indica",category:"photo",flowering_weeks:{min:7,max:9},height_cm:{min:60,max:100},total_weeks:{min:15,max:21},difficulty:"Facile",tips_global:"Ultra-tolérante humidité basse. Buds ultra-denses → airflow maximum. Très résistante au froid.",phases:{veg:{temp:{min:21,max:27},humidity:{min:55,max:65},lamp_height_cm:40,ec:{min:1.2,max:1.8}},flower:{temp:{min:18,max:24},humidity:{min:35,max:50},lamp_height_cm:40,ec:{min:1.5,max:2.0}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  thai:{name:"Thai Feminized",icon:"🌴",type:"Sativa",category:"photo",flowering_weeks:{min:10,max:14},height_cm:{min:150,max:300},total_weeks:{min:18,max:26},difficulty:"Avancé",tips_global:"Stretch x2-3 → LST/SCROG obligatoire. Sensible à la sur-fertilisation.",phases:{veg:{temp:{min:24,max:29},humidity:{min:60,max:75},lamp_height_cm:55,ec:{min:1.0,max:1.6}},flower:{temp:{min:22,max:28},humidity:{min:40,max:55},lamp_height_cm:55,ec:{min:1.4,max:1.8}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  panama_red:{name:"Panama Red Feminized",icon:"🇵🇦",type:"Sativa",category:"photo",flowering_weeks:{min:11,max:14},height_cm:{min:150,max:250},total_weeks:{min:19,max:26},difficulty:"Avancé",tips_global:"Sensible à la lumière excessive en début de flower. Stretch important.",phases:{veg:{temp:{min:24,max:29},humidity:{min:60,max:70},lamp_height_cm:50,ec:{min:1.0,max:1.6}},flower:{temp:{min:22,max:27},humidity:{min:40,max:55},lamp_height_cm:50,ec:{min:1.4,max:1.8}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  colombian_gold:{name:"Colombian Gold Feminized",icon:"🌟",type:"Sativa",category:"photo",flowering_weeks:{min:10,max:16},height_cm:{min:150,max:300},total_weeks:{min:18,max:28},difficulty:"Expert",tips_global:"Stretch énorme → SCROG/supercropping. Nutriments modérés.",phases:{veg:{temp:{min:24,max:29},humidity:{min:55,max:70},lamp_height_cm:55,ec:{min:1.0,max:1.5}},flower:{temp:{min:22,max:27},humidity:{min:40,max:50},lamp_height_cm:55,ec:{min:1.3,max:1.7}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  lambs_bread:{name:"Lamb's Bread Feminized",icon:"🇯🇲",type:"Sativa",category:"photo",flowering_weeks:{min:9,max:11},height_cm:{min:100,max:200},total_weeks:{min:17,max:23},difficulty:"Intermédiaire",tips_global:"Structure ouverte, bonne circulation. Plus rapide que les autres sativas.",phases:{veg:{temp:{min:23,max:28},humidity:{min:55,max:70},lamp_height_cm:45,ec:{min:1.2,max:1.7}},flower:{temp:{min:21,max:26},humidity:{min:40,max:50},lamp_height_cm:45,ec:{min:1.5,max:1.9}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+};
+
+const STRAINS_AUTO = {
+  sticky_beast:{name:"Sticky Beast Automatic",icon:"🍬",type:"Indica Auto",category:"auto",total_weeks:{min:7,max:9},height_cm:{min:60,max:90},difficulty:"Facile",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Très résistante, idéale débutants. LST léger. Buds denses → ventilation max.",phases:{veg:{temp:{min:22,max:27},humidity:{min:50,max:65},lamp_height_cm:60,ec:{min:0.8,max:1.2}},flower:{temp:{min:20,max:25},humidity:{min:40,max:50},lamp_height_cm:40,ec:{min:1.8,max:2.0}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  sunset_sherbet:{name:"Sunset Sherbet Automatic",icon:"🌅",type:"Indica Auto",category:"auto",total_weeks:{min:8,max:10},height_cm:{min:70,max:110},difficulty:"Facile",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Compacte 70-110 cm. Supporte bien l'entraînement.",phases:{veg:{temp:{min:22,max:27},humidity:{min:50,max:65},lamp_height_cm:55,ec:{min:0.8,max:1.3}},flower:{temp:{min:18,max:27},humidity:{min:40,max:50},lamp_height_cm:40,ec:{min:1.6,max:2.0}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  blueberry:{name:"Blueberry Automatic",icon:"🫐",type:"Hybride Auto",category:"auto",total_weeks:{min:8,max:10},height_cm:{min:60,max:100},difficulty:"Facile",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Plus frais → couleurs violettes/bleues. LST/SCROG recommandé.",phases:{veg:{temp:{min:21,max:26},humidity:{min:55,max:70},lamp_height_cm:55,ec:{min:0.8,max:1.3}},flower:{temp:{min:18,max:24},humidity:{min:40,max:50},lamp_height_cm:40,ec:{min:1.4,max:1.8}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  wedding_cake:{name:"Wedding Cake Automatic",icon:"🎂",type:"Indica Auto",category:"auto",total_weeks:{min:9,max:11},height_cm:{min:70,max:110},difficulty:"Intermédiaire",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Buds très épais → humidité critique 40-48%. Ventilation forte.",phases:{veg:{temp:{min:22,max:27},humidity:{min:50,max:65},lamp_height_cm:55,ec:{min:0.8,max:1.3}},flower:{temp:{min:22,max:27},humidity:{min:40,max:48},lamp_height_cm:38,ec:{min:1.6,max:2.0}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  ak420:{name:"AK 420 Automatic",icon:"⚡",type:"Hybride Auto",category:"auto",total_weeks:{min:8,max:10},height_cm:{min:70,max:110},difficulty:"Facile",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Très résistante aux erreurs et moisissures. Effet uplifting.",phases:{veg:{temp:{min:23,max:28},humidity:{min:50,max:65},lamp_height_cm:55,ec:{min:0.8,max:1.3}},flower:{temp:{min:23,max:28},humidity:{min:40,max:50},lamp_height_cm:40,ec:{min:1.5,max:1.9}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  diesel_auto:{name:"Diesel Auto Automatic",icon:"⛽",type:"Sativa Auto",category:"auto",total_weeks:{min:9,max:11},height_cm:{min:80,max:130},difficulty:"Intermédiaire",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"Structure ouverte, stretch possible → LST recommandé.",phases:{veg:{temp:{min:23,max:28},humidity:{min:55,max:70},lamp_height_cm:60,ec:{min:0.8,max:1.3}},flower:{temp:{min:23,max:28},humidity:{min:40,max:50},lamp_height_cm:50,ec:{min:1.5,max:1.9}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+  monster_dwarf:{name:"Monster Dwarf Automatic",icon:"🦐",type:"Indica Auto Naine",category:"auto",total_weeks:{min:8,max:9},height_cm:{min:30,max:60},difficulty:"Facile",light_schedule:"18/6 ou 20/4 seed-to-harvest",tips_global:"30-60 cm → idéale SOG/micro-grow. EC bas, pas de stress.",phases:{veg:{temp:{min:22,max:26},humidity:{min:50,max:65},lamp_height_cm:50,ec:{min:0.6,max:1.0}},flower:{temp:{min:22,max:26},humidity:{min:40,max:50},lamp_height_cm:45,ec:{min:1.4,max:1.8}},drying:{temp:{min:15,max:21},humidity:{min:45,max:55}}}},
+};
+
+const ALL_STRAINS = { ...STRAINS_PHOTO, ...STRAINS_AUTO };
+
+const BOX_PRESETS = [
+  { id:"60x60",   label:"60×60×140 cm",   size:"60×60",   height:140, desc:"1-2 plantes" },
+  { id:"80x80",   label:"80×80×160 cm",   size:"80×80",   height:160, desc:"2-4 plantes" },
+  { id:"100x100", label:"100×100×200 cm", size:"100×100", height:200, desc:"4-6 plantes" },
+  { id:"120x120", label:"120×120×200 cm", size:"120×120", height:200, desc:"6-9 plantes" },
+  { id:"custom",  label:"Dimensions perso", size:"",       height:0,   desc:"" },
+];
+
+function getStatus(v,min,max){
+  if(v===""||v===null||v===undefined||(min===0&&max===0)) return "none";
+  const n=parseFloat(v); if(isNaN(n)) return "none";
+  if(n<min) return "low"; if(n>max) return "high"; return "ok";
+}
+const ST={ok:{b:C.green,bg:C.greenBg,t:C.green,badge:"OK"},low:{b:C.orange,bg:C.orangeBg,t:C.orange,badge:"Bas"},high:{b:C.red,bg:C.redBg,t:C.red,badge:"Haut"},none:{b:C.border,bg:C.bg2,t:C.text3,badge:"—"}};
+
+function getDifficultyColor(d){
+  if(d==="Facile") return C.green;
+  if(d==="Intermédiaire") return C.gold;
+  if(d==="Avancé") return C.orange;
+  return C.red;
+}
+
+function calcCulture(startDate, strainKey) {
+  if (!startDate) return { week:1, phase:"germination", days:0, daysToNext:null, isAuto:false };
+  const days = Math.floor((new Date() - new Date(startDate)) / 86400000);
+  const week = Math.floor(days/7) + 1;
+  const strain = ALL_STRAINS[strainKey];
+  const isAuto = strain?.category === "auto";
+  let phase = "germination";
+  if (isAuto) {
+    const totalDays = (strain.total_weeks.max) * 7;
+    const dryStart = totalDays - 14;
+    if (days >= 7) phase = "veg";
+    if (days >= 21) phase = "flower";
+    if (days >= dryStart) phase = "drying";
+    const milestones = { germination:7, veg:21, flower:dryStart, drying:totalDays };
+    return { week, phase, days, daysToNext: Math.max(0, (milestones[phase]||999) - days), isAuto };
+  } else {
+    if (days >= 7) phase = "veg";
+    if (days >= 63) phase = "flower";
+    if (days >= 147) phase = "drying";
+    const milestones = { germination:7, veg:63, flower:147, drying:161 };
+    return { week, phase, days, daysToNext: Math.max(0, (milestones[phase]||999) - days), isAuto };
+  }
+}
+
+// ─── SAVE/LOAD STATE (localStorage for PWA persistence) ─────────────────────
+function saveState(state) {
+  try { localStorage.setItem('jjfarms-state', JSON.stringify(state)); } catch(e){}
+}
+function loadState() {
+  try {
+    const s = localStorage.getItem('jjfarms-state');
+    return s ? JSON.parse(s) : null;
+  } catch(e){ return null; }
+}
+
+// ─── SVG LOGO ────────────────────────────────────────────────────────────────
+function JJLogo({size=40}){
+  return(
+    <svg width={size} height={size*1.15} viewBox="0 0 80 92" fill="none">
+      <defs>
+        <radialGradient id="lg2" cx="50%" cy="40%" r="60%"><stop offset="0%" stopColor="#6aaa5a"/><stop offset="100%" stopColor="#2d6a22"/></radialGradient>
+        <radialGradient id="gg2" cx="50%" cy="0%" r="100%"><stop offset="0%" stopColor="#f0cc6a"/><stop offset="100%" stopColor="#b8952a"/></radialGradient>
+      </defs>
+      <path d="M40 85 L40 52" stroke="#2d6a22" strokeWidth="2.5" strokeLinecap="round"/>
+      <path d="M40 52 C40 52 30 38 32 26 C34 16 40 12 40 12 C40 12 46 16 48 26 C50 38 40 52 40 52Z" fill="url(#lg2)"/>
+      <path d="M37 46 C37 46 20 40 16 28 C13 19 17 13 17 13 C17 13 24 15 28 23 C33 33 37 46 37 46Z" fill="url(#lg2)" opacity="0.92"/>
+      <path d="M43 46 C43 46 60 40 64 28 C67 19 63 13 63 13 C63 13 56 15 52 23 C47 33 43 46 43 46Z" fill="url(#lg2)" opacity="0.92"/>
+      <path d="M35 54 C35 54 15 52 9 40 C5 31 10 24 10 24 C10 24 18 24 23 32 C29 42 35 54 35 54Z" fill="url(#lg2)" opacity="0.78"/>
+      <path d="M45 54 C45 54 65 52 71 40 C75 31 70 24 70 24 C70 24 62 24 57 32 C51 42 45 54 45 54Z" fill="url(#lg2)" opacity="0.78"/>
+      <circle cx="40" cy="58" r="14" fill="url(#gg2)"/>
+      <text x="40" y="55" textAnchor="middle" fill="#2a1800" fontSize="6.5" fontFamily="serif" fontWeight="700">JJ</text>
+      <text x="40" y="64" textAnchor="middle" fill="#5a3800" fontSize="3.8" fontFamily="serif" letterSpacing="1">FARM'S</text>
+    </svg>
+  );
+}
+
+// ─── METRIC CARD (mobile-optimized) ─────────────────────────────────────────
+function MetricCard({label,value,onChange,min,max,unit,icon}){
+  const st=getStatus(value,min,max); const s=ST[st];
+  return(
+    <div style={{background:s.bg,border:`1.5px solid ${s.b}44`,borderRadius:16,padding:"16px 14px",boxShadow:`0 2px 8px ${C.shadow}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{fontSize:10,color:C.text3,letterSpacing:1.5,fontFamily:"monospace"}}>{icon} {label.toUpperCase()}</span>
+        <span style={{fontSize:10,color:s.t,background:`${s.b}18`,padding:"3px 8px",borderRadius:20,fontFamily:"monospace",fontWeight:600}}>{s.badge}</span>
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+        <input type="number" inputMode="decimal" value={value} onChange={e=>onChange(e.target.value)} placeholder="--"
+          style={{fontSize:36,fontWeight:700,color:s.t,fontFamily:"Georgia,serif",background:"transparent",border:"none",outline:"none",width:"100%"}}/>
+        <span style={{fontSize:13,color:C.text3,fontFamily:"monospace",flexShrink:0}}>{unit}</span>
+      </div>
+      <div style={{fontSize:10,color:C.text3,marginTop:4,fontFamily:"monospace"}}>{min} – {max} {unit}</div>
+    </div>
+  );
+}
+
+// ─── RELAY BTN ───────────────────────────────────────────────────────────────
+function RelayBtn({label,icon,on,onToggle,color}){
+  return(
+    <div style={{background:on?`${color}0e`:C.bg2,border:`1.5px solid ${on?color:C.border}`,borderRadius:14,padding:"14px 14px",boxShadow:on?`0 3px 12px ${color}22`:`0 1px 6px ${C.shadow}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+        <span style={{fontSize:12,color:C.text3,fontFamily:"monospace"}}>{icon} {label}</span>
+        <div style={{width:9,height:9,borderRadius:"50%",background:on?color:C.border2,boxShadow:on?`0 0 7px ${color}`:"none",marginTop:2}}/>
+      </div>
+      <button onClick={onToggle} style={{width:"100%",padding:"10px 0",borderRadius:10,cursor:"pointer",border:`1.5px solid ${on?color:C.border}`,background:on?`${color}15`:"transparent",color:on?color:C.text3,fontSize:13,fontFamily:"monospace",fontWeight:600}}>
+        {on?"⏹ Stop":"▶ Start"}
+      </button>
+    </div>
+  );
+}
+
+// ─── LAMP CONTROL ────────────────────────────────────────────────────────────
+function LampControl({phase}){
+  const pd=PHASES[phase];
+  const [height,setHeight]=useState(pd.lamp_height_cm);
+  const [ledPct,setLedPct]=useState(pd.light_intensity);
+  const isDrying=phase==="drying";
+  useEffect(()=>{setHeight(pd.lamp_height_cm);setLedPct(pd.light_intensity);},[phase]);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:18,padding:"20px 18px",boxShadow:`0 2px 12px ${C.shadow}`}}>
+        <div style={{fontSize:10,color:C.text3,letterSpacing:2,marginBottom:16,fontFamily:"monospace"}}>📍 POSITION LED SF1000</div>
+        <div style={{textAlign:"center",marginBottom:18}}>
+          <span style={{fontSize:48,fontWeight:700,color:C.gold,fontFamily:"Georgia,serif"}}>{isDrying?0:height}</span>
+          <span style={{fontSize:18,color:C.text3,marginLeft:4}}>cm</span>
+          <div style={{fontSize:12,color:C.text2,fontFamily:"monospace",marginTop:4}}>Recommandé : <b style={{color:pd.color}}>{pd.lamp_height_cm}cm</b></div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <button onClick={()=>setHeight(h=>Math.min(80,h+5))} disabled={isDrying}
+            style={{padding:"14px 0",borderRadius:12,cursor:isDrying?"not-allowed":"pointer",border:`1.5px solid ${C.blue}`,background:C.blueBg,color:isDrying?C.text3:C.blue,fontSize:14,fontFamily:"monospace",fontWeight:700}}>
+            ↑ +5cm
+          </button>
+          <button onClick={()=>setHeight(h=>Math.max(15,h-5))} disabled={isDrying}
+            style={{padding:"14px 0",borderRadius:12,cursor:isDrying?"not-allowed":"pointer",border:`1.5px solid ${C.orange}`,background:C.orangeBg,color:isDrying?C.text3:C.orange,fontSize:14,fontFamily:"monospace",fontWeight:700}}>
+            ↓ -5cm
+          </button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          {[{l:"🌱 60cm",h:60},{l:"🌿 45cm",h:45},{l:"🌸 35cm",h:35}].map(p=>(
+            <button key={p.h} onClick={()=>setHeight(p.h)}
+              style={{padding:"10px 4px",borderRadius:10,cursor:"pointer",border:`1px solid ${Math.abs(height-p.h)<3?C.gold:C.border}`,background:Math.abs(height-p.h)<3?C.goldBg:"transparent",color:Math.abs(height-p.h)<3?C.gold:C.text3,fontSize:11,fontFamily:"monospace"}}>
+              {p.l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:16,padding:"18px 18px",boxShadow:`0 2px 12px ${C.shadow}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:10,color:C.text3,letterSpacing:2,fontFamily:"monospace"}}>💡 INTENSITÉ LED</div>
+          <span style={{fontSize:26,fontWeight:700,color:isDrying?C.text3:C.gold,fontFamily:"Georgia,serif"}}>{isDrying?0:ledPct}%</span>
+        </div>
+        <input type="range" min="0" max="100" value={isDrying?0:ledPct} onChange={e=>setLedPct(parseInt(e.target.value))} disabled={isDrying} style={{width:"100%"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.text3,fontFamily:"monospace",marginTop:6}}>
+          <span>0%</span><span style={{color:C.gold}}>Reco: {pd.light_intensity}%</span><span>100%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── STRAIN SELECTOR ─────────────────────────────────────────────────────────
+function StrainSelector({ value, onChange }) {
+  const groups = [
+    { label:"🏔️ INDICA PHOTO", keys: Object.keys(STRAINS_PHOTO).filter(k=>STRAINS_PHOTO[k].type==="Indica") },
+    { label:"🌴 SATIVA PHOTO", keys: Object.keys(STRAINS_PHOTO).filter(k=>STRAINS_PHOTO[k].type==="Sativa") },
+    { label:"⚡ AUTO INDICA",  keys: Object.keys(STRAINS_AUTO).filter(k=>STRAINS_AUTO[k].type.includes("Indica")) },
+    { label:"🌬 AUTO HYBRIDE/SATIVA", keys: Object.keys(STRAINS_AUTO).filter(k=>!STRAINS_AUTO[k].type.includes("Indica")) },
+  ];
+  return (
+    <div style={{position:"relative"}}>
+      <select value={value} onChange={e=>onChange(e.target.value)}
+        style={{width:"100%",background:C.bg3,border:`1.5px solid ${C.border}`,color:C.text,padding:"13px 36px 13px 14px",borderRadius:12,fontFamily:"monospace",fontSize:13,outline:"none",WebkitAppearance:"none"}}>
+        {groups.map(g=>(
+          <optgroup key={g.label} label={g.label}>
+            {g.keys.map(k=>{
+              const s=ALL_STRAINS[k];
+              return <option key={k} value={k}>{s.icon} {s.name}</option>;
+            })}
+          </optgroup>
+        ))}
+      </select>
+      <div style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:12,color:C.text3}}>▼</div>
+    </div>
+  );
+}
+
+// ─── BOX RECOMMENDATIONS ─────────────────────────────────────────────────────
+function BoxRecommendations({ strainKey, boxPresetId, customBox }) {
+  const s = ALL_STRAINS[strainKey]; if(!s) return null;
+  let boxH = 0;
+  if (boxPresetId === "custom") { boxH = parseInt(customBox.height)||0; }
+  else { const p = BOX_PRESETS.find(b=>b.id===boxPresetId); boxH = p?.height||0; }
+  if (boxH===0) return null;
+  const usableH = boxH - 40 - 20;
+  const fits = usableH >= s.height_cm.max;
+  const tight = usableH >= s.height_cm.max * 0.75 && usableH < s.height_cm.max;
+  const recs = [];
+  if (!fits && !tight) recs.push({ type:"warn", text:`⚠️ Box limite ! Hauteur utile ~${usableH}cm vs plante max ${s.height_cm.max}cm. LST/SCROG recommandé.` });
+  else if (tight) recs.push({ type:"warn", text:`📐 Serré. ~${usableH}cm utile — entraînement conseillé.` });
+  else recs.push({ type:"ok", text:`✅ Box adaptée ! ~${usableH}cm utile.` });
+  if (s.category==="auto") recs.push({ type:"tip", text:"⚡ Auto: lumière constante toute la vie." });
+  const colors={ok:C.green,warn:C.orange,tip:C.blue};
+  const bgs={ok:C.greenBg,warn:C.orangeBg,tip:C.blueBg};
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+      {recs.map((r,i)=>(
+        <div key={i} style={{fontSize:11,color:colors[r.type],background:bgs[r.type],padding:"8px 12px",borderRadius:8,border:`1px solid ${colors[r.type]}33`,fontFamily:"monospace",lineHeight:1.5}}>{r.text}</div>
+      ))}
+    </div>
+  );
+}
+
+// ─── START POPUP ──────────────────────────────────────────────────────────────
+function StartPopup({onStart, initialData}){
+  const [date,setDate]=useState(initialData?.startDate || new Date().toISOString().split("T")[0]);
+  const [strain,setStrain]=useState(initialData?.strain || "afghani");
+  const [boxPreset,setBoxPreset]=useState(initialData?.boxInfo?.preset || "100x100");
+  const [customBox,setCustomBox]=useState(initialData?.boxInfo?.custom || {size:"",height:""});
+  const [step,setStep]=useState(1);
+
+  const s = ALL_STRAINS[strain];
+  const isAuto = s?.category === "auto";
+  const estimatedHarvest = () => {
+    const d = new Date(date); const weeks = s.total_weeks.max;
+    d.setDate(d.getDate() + weeks * 7);
+    return d.toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+  };
+  const selectedBox = boxPreset === "custom"
+    ? { label:`Perso ${customBox.height||"?"}cm` }
+    : BOX_PRESETS.find(b=>b.id===boxPreset);
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:999,padding:0}}>
+      <div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:"28px 22px 40px",width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,0.3)"}}>
+        
+        {/* Handle */}
+        <div style={{width:36,height:4,background:C.border2,borderRadius:2,margin:"0 auto 20px"}}/>
+
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <JJLogo size={52}/>
+          <div style={{fontSize:20,fontWeight:700,color:C.text,marginTop:10,fontFamily:"Georgia,serif"}}>JJ Farm's</div>
+          <div style={{fontSize:12,color:C.text3}}>{initialData ? "Modifier la culture" : "Nouvelle culture"}</div>
+        </div>
+
+        {step===1 && (
+          <>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,color:C.text3,letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>📅 DATE DE DÉBUT</div>
+              <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+                style={{width:"100%",background:C.bg3,border:`1.5px solid ${C.border}`,color:C.text,padding:"13px 14px",borderRadius:12,fontFamily:"monospace",fontSize:14,outline:"none"}}/>
+            </div>
+
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,color:C.text3,letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>🌿 VARIÉTÉ</div>
+              <StrainSelector value={strain} onChange={setStrain}/>
+              {/* Strain preview card */}
+              <div style={{background:C.goldBg,border:`1px solid ${C.goldXL}66`,borderRadius:12,padding:"12px 14px",marginTop:10}}>
+                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <span style={{fontSize:28}}>{s?.icon}</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"Georgia,serif"}}>{s?.name}</div>
+                    <div style={{display:"flex",gap:6,marginTop:3,flexWrap:"wrap"}}>
+                      <span style={{fontSize:10,background:`${C.gold}22`,color:C.gold,padding:"2px 8px",borderRadius:20,fontFamily:"monospace"}}>{s?.type}</span>
+                      <span style={{fontSize:10,background:`${getDifficultyColor(s?.difficulty)}22`,color:getDifficultyColor(s?.difficulty),padding:"2px 8px",borderRadius:20,fontFamily:"monospace"}}>{s?.difficulty}</span>
+                      {isAuto&&<span style={{fontSize:10,background:`${C.purple}22`,color:C.purple,padding:"2px 8px",borderRadius:20,fontFamily:"monospace"}}>AUTO ⚡</span>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:C.text2,marginTop:10,lineHeight:1.6,fontFamily:"monospace",background:"#fff8",padding:"8px 10px",borderRadius:8}}>
+                  💡 {s?.tips_global}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10}}>
+                  {[
+                    {l:"Floraison",v:isAuto?`${s.total_weeks.min}-${s.total_weeks.max}sem`:`${s.flowering_weeks?.min}-${s.flowering_weeks?.max}sem`},
+                    {l:"Hauteur",v:`${s.height_cm.min}-${s.height_cm.max}cm`},
+                    {l:"Total",v:`${s.total_weeks.min}-${s.total_weeks.max}sem`},
+                  ].map((r,i)=>(
+                    <div key={i} style={{background:"#fff",borderRadius:8,padding:"8px 6px",textAlign:"center",border:`1px solid ${C.border}`}}>
+                      <div style={{fontSize:9,color:C.text3,fontFamily:"monospace"}}>{r.l}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.gold,marginTop:2}}>{r.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:10,color:C.text3,letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>📦 BOX / GROWROOM</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {BOX_PRESETS.map(bp=>(
+                  <button key={bp.id} onClick={()=>setBoxPreset(bp.id)}
+                    style={{padding:"11px 10px",borderRadius:12,cursor:"pointer",border:`1.5px solid ${boxPreset===bp.id?C.gold:C.border}`,background:boxPreset===bp.id?C.goldBg:"transparent",color:boxPreset===bp.id?C.gold:C.text3,fontSize:11,fontFamily:"monospace",textAlign:"left",lineHeight:1.4}}>
+                    <div style={{fontWeight:700}}>{bp.label}</div>
+                    {bp.desc&&<div style={{fontSize:9,opacity:0.7}}>{bp.desc}</div>}
+                  </button>
+                ))}
+              </div>
+              {boxPreset==="custom"&&(
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <input placeholder="Ex: 90×90" value={customBox.size} onChange={e=>setCustomBox(b=>({...b,size:e.target.value}))}
+                    style={{flex:2,background:C.bg3,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:10,fontFamily:"monospace",fontSize:12,outline:"none"}}/>
+                  <input placeholder="Hauteur cm" type="number" inputMode="numeric" value={customBox.height} onChange={e=>setCustomBox(b=>({...b,height:e.target.value}))}
+                    style={{flex:1,background:C.bg3,border:`1px solid ${C.border}`,color:C.text,padding:"10px 12px",borderRadius:10,fontFamily:"monospace",fontSize:12,outline:"none"}}/>
+                </div>
+              )}
+              <BoxRecommendations strainKey={strain} boxPresetId={boxPreset} customBox={customBox}/>
+            </div>
+
+            <button onClick={()=>setStep(2)} style={{width:"100%",padding:"16px 0",borderRadius:14,cursor:"pointer",background:`linear-gradient(135deg,${C.gold},${C.goldL})`,border:"none",color:"#fff",fontSize:15,fontFamily:"monospace",fontWeight:700,boxShadow:`0 6px 20px ${C.gold}44`,letterSpacing:1}}>
+              Récapitulatif →
+            </button>
+          </>
+        )}
+
+        {step===2 && (
+          <>
+            <div style={{background:C.goldBg,border:`1.5px solid ${C.goldXL}55`,borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+              <div style={{fontSize:11,color:C.gold,letterSpacing:2,fontFamily:"monospace",marginBottom:12}}>📋 RÉCAPITULATIF</div>
+              {[
+                {l:"Variété",     v:`${s.icon} ${s.name}`,c:C.text},
+                {l:"Type",        v:`${s.type}${isAuto?" — Auto":""}`,c:C.gold},
+                {l:"Difficulté",  v:s.difficulty,c:getDifficultyColor(s.difficulty)},
+                {l:"Début",       v:new Date(date).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}),c:C.text},
+                {l:"Durée",       v:`${s.total_weeks.min}-${s.total_weeks.max} semaines`,c:C.green},
+                {l:"Récolte ≈",   v:estimatedHarvest(),c:C.teal},
+                {l:"Box",         v:selectedBox?.label||"Non définie",c:C.text2},
+                {l:"Lumière",     v:isAuto?s.light_schedule:"18/6 veg → 12/12 flower",c:C.orange},
+              ].map(r=>(
+                <div key={r.l} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",borderBottom:`1px solid ${C.border}`,paddingBottom:8,marginBottom:8}}>
+                  <span style={{fontSize:11,color:C.text3,fontFamily:"monospace"}}>{r.l}</span>
+                  <span style={{fontSize:12,color:r.c,fontWeight:600,fontFamily:"monospace",textAlign:"right",maxWidth:"60%"}}>{r.v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:10}}>
+              <button onClick={()=>setStep(1)} style={{padding:"14px 0",borderRadius:12,cursor:"pointer",background:"transparent",border:`1.5px solid ${C.border}`,color:C.text3,fontSize:13,fontFamily:"monospace"}}>
+                ← Modifier
+              </button>
+              <button onClick={()=>onStart(date,strain,boxPreset,customBox)} style={{padding:"16px 0",borderRadius:12,cursor:"pointer",background:`linear-gradient(135deg,${C.green},#2d8a3f)`,border:"none",color:"#fff",fontSize:15,fontFamily:"monospace",fontWeight:700,boxShadow:`0 6px 20px ${C.green}55`,letterSpacing:1}}>
+                🌱 DÉMARRER
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BOTTOM NAV ──────────────────────────────────────────────────────────────
+function BottomNav({ tab, setTab, alertCount }) {
+  const tabs = [
+    { id:"suivi",  icon:"📊", label:"Suivi" },
+    { id:"air",    icon:"💨", label:"Air" },
+    { id:"hydro",  icon:"💧", label:"Hydro" },
+    { id:"climat", icon:"🔌", label:"Climat" },
+    { id:"lampe",  icon:"💡", label:"Lampe" },
+    { id:"ia",     icon:"🤖", label:"IA" },
+  ];
+  return (
+    <div style={{
+      display:"flex", background:"#fff", borderTop:`1.5px solid ${C.border}`,
+      paddingBottom:"env(safe-area-inset-bottom,0px)",
+      boxShadow:`0 -2px 16px ${C.shadow}`, flexShrink:0,
+    }}>
+      {tabs.map(t=>(
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{
+          flex:1, padding:"10px 2px 8px", border:"none", cursor:"pointer",
+          background:"transparent", display:"flex", flexDirection:"column",
+          alignItems:"center", gap:3, position:"relative",
+        }}>
+          <span style={{fontSize:20}}>{t.icon}</span>
+          <span style={{fontSize:9,fontFamily:"monospace",color:tab===t.id?C.gold:C.text3,fontWeight:tab===t.id?700:400,letterSpacing:0.5}}>
+            {t.label.toUpperCase()}
+          </span>
+          {tab===t.id && <div style={{position:"absolute",top:0,left:"20%",right:"20%",height:2,background:C.gold,borderRadius:"0 0 2px 2px"}}/>}
+          {t.id==="air" && alertCount>0 && (
+            <div style={{position:"absolute",top:6,right:"18%",width:8,height:8,borderRadius:"50%",background:C.red}}/>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App(){
+  const saved = loadState();
+
+  const [showStart,setShowStart]=useState(!saved?.startDate);
+  const [startDate,setStartDate]=useState(saved?.startDate || null);
+  const [strain,setStrain]=useState(saved?.strain || "afghani");
+  const [boxInfo,setBoxInfo]=useState(saved?.boxInfo || {preset:"100x100",custom:{}});
+  const [manualPhase,setManualPhase]=useState(null);
+  const [tab,setTab]=useState("suivi");
+  const [autoMode,setAutoMode]=useState(true);
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiText,setAiText]=useState("");
+  const [sensors,setSensors]=useState(saved?.sensors||{temp:"",humidity:"",co2:"",vpd:""});
+  const [hydro,setHydro]=useState(saved?.hydro||{ph:"",ec:"",water_temp:""});
+  const [relays,setRelays]=useState({light:true,extractor:true,fan:false,humidifier:false,dehumidifier:false,heater:false});
+
+  // Auto-save to localStorage on state change
+  useEffect(()=>{
+    if(startDate) saveState({startDate,strain,boxInfo,sensors,hydro});
+  },[startDate,strain,boxInfo,sensors,hydro]);
+
+  const cult=calcCulture(startDate, strain);
+  const phase=manualPhase||cult.phase;
+  const pd=PHASES[phase];
+  const strainData = ALL_STRAINS[strain] || ALL_STRAINS.afghani;
+  const isAuto = strainData.category === "auto";
+
+  const strainPhaseData = strainData.phases?.[phase] || {};
+  const prof = {
+    ...pd,
+    temp: strainPhaseData.temp || pd.temp,
+    humidity: strainPhaseData.humidity || pd.humidity,
+    hydro: {
+      ph: pd.hydro.ph,
+      ec: strainPhaseData.ec ? strainPhaseData.ec : pd.hydro.ec,
+      water_temp: pd.hydro.water_temp,
+    },
+  };
+  const hp=prof.hydro;
+
+  useEffect(()=>{
+    if(!autoMode) return;
+    const t=parseFloat(sensors.temp),h=parseFloat(sensors.humidity);
+    if(!isNaN(t)) setRelays(r=>({...r,heater:t<prof.temp.min,extractor:t>prof.temp.max}));
+    if(!isNaN(h)) setRelays(r=>({...r,humidifier:h<prof.humidity.min,dehumidifier:h>prof.humidity.max}));
+    if(phase==="drying") setRelays(r=>({...r,light:false}));
+  },[sensors,phase,autoMode]);
+
+  const allAlerts=[
+    ...Object.entries(sensors).map(([k,v])=>{const t=prof[k];if(!t||v==="") return null;const s=getStatus(v,t.min,t.max);return s!=="ok"&&s!=="none"?k:null;}).filter(Boolean),
+    ...Object.entries(hydro).map(([k,v])=>{const t=hp[k];if(!t||v===""||t.min===0) return null;const s=getStatus(v,t.min,t.max);return s!=="ok"&&s!=="none"?k:null;}).filter(Boolean),
+  ];
+
+  const askAI=async()=>{
+    setAiLoading(true);setAiText("");
+    const prompt=`Tu es l'IA de JJ Farm's, expert culture hydroponique.
+Variété: ${strainData.name} (${strainData.type}) | Phase: ${pd.label} | Semaine ${cult.week} | Jour ${cult.days+1}
+Air: T${sensors.temp}°C H${sensors.humidity}% CO2:${sensors.co2}ppm VPD:${sensors.vpd}kPa
+${phase!=="drying"?`Hydro: pH:${hydro.ph} EC:${hydro.ec}mS/cm Teau:${hydro.water_temp}°C`:"Séchage - pas d'hydro"}
+Cibles: T${prof.temp.min}-${prof.temp.max}°C H${prof.humidity.min}-${prof.humidity.max}%
+Conseils variété: ${strainData.tips_global}
+Analyse les conditions et donne des recommandations précises et concrètes. 120 mots max, français.`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,messages:[{role:"user",content:prompt}]})});
+      const d=await res.json();
+      setAiText(d.content?.map(i=>i.text||"").join("\n")||"Erreur.");
+    }catch{setAiText("Erreur de connexion à l'IA.");}
+    setAiLoading(false);
+  };
+
+  const handleStart=(d,s,bp,cb)=>{
+    setStartDate(d);setStrain(s);setBoxInfo({preset:bp,custom:cb});setShowStart(false);
+  };
+
+  return(
+    <div style={{height:"100vh",height:"100dvh",display:"flex",flexDirection:"column",background:`linear-gradient(160deg,${C.bg} 0%,#ede8df 100%)`}}>
+      
+      {showStart && <StartPopup onStart={handleStart} initialData={startDate?{startDate,strain,boxInfo}:null}/>}
+
+      {/* HEADER */}
+      <header style={{
+        background:"linear-gradient(180deg,#fff 0%,#fffdf8 100%)",
+        borderBottom:`1.5px solid ${C.border}`,
+        padding:`calc(env(safe-area-inset-top,0px) + 10px) 18px 10px`,
+        display:"flex",justifyContent:"space-between",alignItems:"center",
+        boxShadow:`0 2px 16px ${C.shadow}`,flexShrink:0,
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <JJLogo size={38}/>
+          <div>
+            <div style={{fontSize:8,color:C.gold,letterSpacing:3,fontFamily:"monospace"}}>CULTIVATION INTELLIGENCE</div>
+            <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"Georgia,serif",lineHeight:1.1}}>JJ Farm's</div>
+            <div style={{fontSize:10,color:C.text3,fontFamily:"monospace"}}>
+              {strainData.icon} {strainData.name.split(" ").slice(0,2).join(" ")}
+              {isAuto&&<span style={{color:C.purple}}> ⚡</span>}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {allAlerts.length>0&&(
+            <div style={{background:C.redBg,border:`1px solid ${C.red}44`,borderRadius:10,padding:"4px 10px"}}>
+              <span style={{color:C.red,fontSize:11,fontFamily:"monospace"}}>⚠ {allAlerts.length}</span>
+            </div>
+          )}
+          <div style={{background:pd.bg,border:`1.5px solid ${pd.color}44`,borderRadius:12,padding:"7px 12px",textAlign:"center",cursor:"pointer"}} onClick={()=>setShowStart(true)}>
+            <div style={{fontSize:12,color:pd.color,fontWeight:700,lineHeight:1.2}}>{pd.label}</div>
+            <div style={{fontSize:11,color:C.gold,fontFamily:"monospace",fontWeight:700}}>S{cult.week} J{cult.days+1}</div>
+          </div>
+        </div>
+      </header>
+
+      {/* SCROLL AREA */}
+      <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+        <div style={{padding:"14px 14px 6px"}}>
+
+          {/* Phase Quick Switch */}
+          <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:4}}>
+            {Object.entries(PHASES).map(([key,p])=>(
+              <button key={key} onClick={()=>setManualPhase(key===cult.phase&&!manualPhase?null:key)}
+                style={{flexShrink:0,padding:"8px 12px",borderRadius:20,cursor:"pointer",fontSize:11,fontFamily:"monospace",border:`1.5px solid ${phase===key?p.color:C.border}`,background:phase===key?p.bg:"transparent",color:phase===key?p.color:C.text3,whiteSpace:"nowrap"}}>
+                {p.label}{key===cult.phase&&<span style={{fontSize:8,opacity:0.6}}> auto</span>}
+              </button>
+            ))}
+            <button onClick={()=>setAutoMode(a=>!a)}
+              style={{flexShrink:0,padding:"8px 12px",borderRadius:20,cursor:"pointer",border:`1.5px solid ${autoMode?C.green:C.border}`,background:autoMode?C.greenBg:"transparent",color:autoMode?C.green:C.text3,fontSize:11,fontFamily:"monospace"}}>
+              {autoMode?"🤖 AUTO":"👋 MANUEL"}
+            </button>
+          </div>
+
+          {/* Tips banner */}
+          <div style={{background:pd.bg,border:`1px solid ${pd.color}22`,borderRadius:12,padding:"10px 14px",marginBottom:12,fontSize:11,color:pd.color,fontFamily:"monospace",lineHeight:1.5}}>
+            {pd.label} — {isAuto?strainData.light_schedule:`${pd.light_hours}h lumière`} · {strainData.tips_global}
+          </div>
+
+          {/* TAB CONTENT */}
+          <div className="fade-in" key={tab}>
+
+          {/* SUIVI */}
+          {tab==="suivi" && (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Progress bar */}
+              <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:16,padding:"16px 18px",boxShadow:`0 2px 12px ${C.shadow}`}}>
+                <div style={{fontSize:10,color:C.text3,letterSpacing:2,marginBottom:12,fontFamily:"monospace"}}>PROGRESSION</div>
+                <div style={{height:8,background:C.bg3,borderRadius:4,overflow:"hidden",marginBottom:14}}>
+                  <div style={{height:"100%",width:`${Math.min(100,(cult.days/161)*100)}%`,background:`linear-gradient(90deg,${C.teal},${C.green},${C.gold},${C.orange})`,borderRadius:4,transition:"width 0.5s"}}/>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+                  {[{key:"germination",d:0},{key:"veg",d:7},{key:"flower",d:63},{key:"drying",d:147}].map(step=>{
+                    const isAct=phase===step.key, isDone=cult.days>step.d+7&&!isAct, p=PHASES[step.key];
+                    return(
+                      <div key={step.key} style={{background:isAct?p.bg:isDone?`${p.color}08`:C.bg3,border:`1.5px solid ${isAct?p.color:isDone?`${p.color}22`:C.border}`,borderRadius:10,padding:"10px 6px",textAlign:"center"}}>
+                        <div style={{fontSize:20}}>{p.label.split(" ")[0]}</div>
+                        <div style={{fontSize:9,fontWeight:700,color:isAct?p.color:isDone?p.color:C.text3,fontFamily:"monospace",marginTop:3}}>
+                          {step.key==="germination"?"GERM":step.key==="veg"?"VEG":step.key==="flower"?"FLEUR":"SÉCH"}
+                        </div>
+                        {isAct&&<div style={{fontSize:8,color:p.color,fontFamily:"monospace",marginTop:2,fontWeight:700}}>EN COURS</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                {[
+                  {l:"JOUR",v:`J${cult.days+1}`,c:C.green},
+                  {l:"SEMAINE",v:`S${cult.week}`,c:C.gold},
+                  {l:"PROCHAINE",v:cult.daysToNext>0?`${cult.daysToNext}j`:"Final",c:pd.color},
+                ].map(s=>(
+                  <div key={s.l} style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:14,padding:"14px 10px",boxShadow:`0 2px 8px ${C.shadow}`,textAlign:"center"}}>
+                    <div style={{fontSize:9,color:C.text3,letterSpacing:1.5,fontFamily:"monospace"}}>{s.l}</div>
+                    <div style={{fontSize:28,fontWeight:700,color:s.c,fontFamily:"Georgia,serif",lineHeight:1.1,marginTop:4}}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Targets */}
+              <div style={{background:pd.bg,border:`1.5px solid ${pd.color}33`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{fontSize:10,color:pd.color,letterSpacing:2,marginBottom:10,fontFamily:"monospace"}}>CIBLES — {strainData.icon} {strainData.name}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[
+                    {l:"Température",v:`${prof.temp.min}-${prof.temp.max}°C`},
+                    {l:"Humidité",v:`${prof.humidity.min}-${prof.humidity.max}%`},
+                    {l:"CO₂",v:`${pd.co2.min}-${pd.co2.max}ppm`},
+                    {l:"EC cible",v:phase!=="drying"?`${hp.ec.min}-${hp.ec.max}mS`:"N/A"},
+                    {l:"Lumière",v:isAuto?strainData.light_schedule:`${pd.light_hours}h`},
+                    {l:"Hauteur",v:`${strainData.height_cm.min}-${strainData.height_cm.max}cm`},
+                  ].map(r=>(
+                    <div key={r.l} style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:10,color:C.text3,fontFamily:"monospace"}}>{r.l}</div>
+                      <div style={{fontSize:12,color:pd.color,fontWeight:700}}>{r.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modify button */}
+              <button onClick={()=>setShowStart(true)} style={{padding:"14px 0",borderRadius:14,cursor:"pointer",border:`1.5px solid ${C.border}`,background:"#fff",color:C.text3,fontSize:13,fontFamily:"monospace",boxShadow:`0 2px 8px ${C.shadow}`}}>
+                ✏️ Modifier la culture
+              </button>
+            </div>
+          )}
+
+          {/* AIR */}
+          {tab==="air" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <MetricCard label="Température" value={sensors.temp} onChange={v=>setSensors(s=>({...s,temp:v}))} min={prof.temp.min} max={prof.temp.max} unit="°C" icon="🌡"/>
+              <MetricCard label="Humidité" value={sensors.humidity} onChange={v=>setSensors(s=>({...s,humidity:v}))} min={prof.humidity.min} max={prof.humidity.max} unit="%" icon="💧"/>
+              <MetricCard label="CO₂" value={sensors.co2} onChange={v=>setSensors(s=>({...s,co2:v}))} min={pd.co2.min} max={pd.co2.max} unit="ppm" icon="🌬"/>
+              <MetricCard label="VPD" value={sensors.vpd} onChange={v=>setSensors(s=>({...s,vpd:v}))} min={pd.vpd.min} max={pd.vpd.max} unit="kPa" icon="📊"/>
+            </div>
+          )}
+
+          {/* HYDRO */}
+          {tab==="hydro" && (
+            phase==="drying" ? (
+              <div style={{background:C.orangeBg,border:`1.5px solid ${C.orange}44`,borderRadius:16,padding:"40px 20px",textAlign:"center"}}>
+                <div style={{fontSize:48,marginBottom:12}}>🍂</div>
+                <div style={{fontSize:16,color:C.orange,fontWeight:700}}>Phase Séchage</div>
+                <div style={{fontSize:13,color:C.text3,marginTop:8,fontFamily:"monospace"}}>Hydro désactivé</div>
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <MetricCard label="pH" value={hydro.ph} onChange={v=>setHydro(h=>({...h,ph:v}))} min={hp.ph.min} max={hp.ph.max} unit="pH" icon="🧪"/>
+                <MetricCard label="EC" value={hydro.ec} onChange={v=>setHydro(h=>({...h,ec:v}))} min={hp.ec.min} max={hp.ec.max} unit="mS/cm" icon="⚡"/>
+                <MetricCard label="Température eau" value={hydro.water_temp} onChange={v=>setHydro(h=>({...h,water_temp:v}))} min={hp.water_temp.min} max={hp.water_temp.max} unit="°C" icon="🌡"/>
+              </div>
+            )
+          )}
+
+          {/* CLIMAT */}
+          {tab==="climat" && (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {autoMode && (
+                <div style={{background:C.goldBg,border:`1.5px solid ${C.goldXL}55`,borderRadius:12,padding:"10px 14px",fontSize:11,color:C.text2,fontFamily:"monospace"}}>
+                  🤖 Mode automatique actif — les relais s'adaptent aux valeurs saisies.
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <RelayBtn label="LED SF1000" icon="💡" on={relays.light&&phase!=="drying"} onToggle={()=>setRelays(r=>({...r,light:!r.light}))} color="#d4a017"/>
+                <RelayBtn label="Extracteur" icon="💨" on={relays.extractor} onToggle={()=>setRelays(r=>({...r,extractor:!r.extractor}))} color={C.blue}/>
+                <RelayBtn label="Ventilateur" icon="🌀" on={relays.fan} onToggle={()=>setRelays(r=>({...r,fan:!r.fan}))} color={C.blue}/>
+                <RelayBtn label="Humidif." icon="💧" on={relays.humidifier} onToggle={()=>setRelays(r=>({...r,humidifier:!r.humidifier}))} color={C.blue}/>
+                <RelayBtn label="Déshumid." icon="🌬" on={relays.dehumidifier} onToggle={()=>setRelays(r=>({...r,dehumidifier:!r.dehumidifier}))} color={C.orange}/>
+                <RelayBtn label="Chauffage" icon="🔥" on={relays.heater} onToggle={()=>setRelays(r=>({...r,heater:!r.heater}))} color={C.red}/>
+              </div>
+            </div>
+          )}
+
+          {tab==="lampe" && <LampControl phase={phase}/>}
+
+          {/* IA */}
+          {tab==="ia" && (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:16,padding:"16px 18px",boxShadow:`0 2px 12px ${C.shadow}`}}>
+                <div style={{fontSize:9,color:C.gold,letterSpacing:3,fontFamily:"monospace",marginBottom:4}}>INTELLIGENCE ARTIFICIELLE</div>
+                <div style={{fontSize:13,color:C.text,marginBottom:14}}>
+                  Analyse : {strainData.icon} {strainData.name} — {pd.label} — S{cult.week}
+                </div>
+                <button onClick={askAI} disabled={aiLoading} style={{width:"100%",padding:"14px 0",borderRadius:12,cursor:aiLoading?"not-allowed":"pointer",background:aiLoading?C.bg3:`linear-gradient(135deg,${C.gold},${C.goldL})`,border:`1.5px solid ${C.gold}`,color:aiLoading?C.text3:"#fff",fontSize:14,fontFamily:"monospace",fontWeight:700,boxShadow:aiLoading?"none":`0 4px 16px ${C.gold}44`}}>
+                  {aiLoading?"⏳ Analyse en cours...":"🤖 Analyser mes conditions"}
+                </button>
+              </div>
+              <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:16,padding:"18px 18px",minHeight:160,fontSize:13,lineHeight:1.9,color:C.text2,whiteSpace:"pre-wrap",fontFamily:"monospace",boxShadow:`0 2px 12px ${C.shadow}`}}>
+                {aiText || <span style={{color:C.text3}}>Remplis les onglets Air et Hydro, puis tape sur Analyser.</span>}
+              </div>
+            </div>
+          )}
+
+          </div>
+          <div style={{height:8}}/>
+        </div>
+      </div>
+
+      {/* BOTTOM NAV */}
+      <BottomNav tab={tab} setTab={setTab} alertCount={allAlerts.length}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<!-- Service Worker for offline use -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

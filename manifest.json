@@ -1,0 +1,20 @@
+{
+  "name": "JJ Farm's — Cultivation Intelligence",
+  "short_name": "JJ Farm's",
+  "description": "Dashboard de culture hydroponique intelligent",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f7f3ec",
+  "theme_color": "#b8952a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%23f7f3ec'/><text y='320' x='50%' text-anchor='middle' font-size='300'>🌿</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "utilities"],
+  "lang": "fr"
+}
